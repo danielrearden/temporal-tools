@@ -1,0 +1,42 @@
+concurrency:
+  cancel-in-progress: true
+  group: ${{ github.event.pull_request.number || github.ref }}-pull-request
+name: "ci"
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v2
+      - uses: actions/setup-node@v3
+        with:
+          node-version: "20.x"
+          cache: "pnpm"
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+  test:
+    needs: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v2
+      - name: setup Node ${{ matrix.node-version }}
+        uses: actions/setup-node@v3
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: "pnpm"
+      - run: pnpm install --frozen-lockfile
+      - run: docker compose up -d
+      - run: pnpm wait-on-temporal
+      - run: pnpm test
+      - if: always()
+        run: docker compose down
+    strategy:
+      matrix:
+        node-version: ["18.x", "20.x"]
+on:
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
