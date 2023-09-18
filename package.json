@@ -1,0 +1,46 @@
+{
+  "name": "temporal-tools",
+  "version": "1.0.0",
+  "description": "A set of utilities for building Temporal applications, with a focus on DX and type-safety.",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "rm -rf dist && tsc -p tsconfig.build.json",
+    "lint": "prettier --check . && tsc",
+    "prepublishOnly": "pnpm build",
+    "test": "tsx --test ./test/*",
+    "waitOnTemporal": "node ./scripts/waitOnTemporal.js"
+  },
+  "keywords": [
+    "temporal",
+    "temporalio",
+    "temporal-tools"
+  ],
+  "author": "Daniel Rearden <danielrearden@gmail.com>",
+  "license": "MIT",
+  "files": [
+    "dist"
+  ],
+  "dependencies": {
+    "@temporalio/client": "^1.8.6",
+    "@temporalio/common": "^1.8.6",
+    "@temporalio/worker": "^1.8.6",
+    "@temporalio/workflow": "^1.8.6"
+  },
+  "devDependencies": {
+    "@types/node": "^20.8.6",
+    "prettier": "^3.0.3",
+    "tsx": "^3.13.0",
+    "typescript": "^5.2.2",
+    "zod": "^3.22.2"
+  },
+  "peerDependencies": {
+    "zod": "^3.0.0"
+  },
+  "packageManager": "pnpm@8.9.0"
+}
