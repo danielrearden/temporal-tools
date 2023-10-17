@@ -25,10 +25,7 @@ Define the configuration for your Temporal namespace by calling `createTemporalC
 ```typescript
 export const configuration = createTemporalConfiguration({
   namespace: "my-app",
-  taskQueues: {
-    "high-priority": true,
-    "low-priority": true,
-  },
+  taskQueues: ["high-priority", "low-priority"],
   activities: {
     sayHello: {
       args: z.tuple([z.object({ name: z.string() })]),
