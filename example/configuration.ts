@@ -3,9 +3,7 @@ import z from "zod";
 
 export const configuration = createTemporalConfiguration({
   namespace: "default",
-  taskQueues: {
-    "high-priority": true,
-  },
+  taskQueues: ["high-priority"] as const,
   activities: {
     sayHello: {
       args: z.tuple([z.object({ name: z.string() })]),
@@ -78,3 +76,5 @@ export const configuration = createTemporalConfiguration({
 });
 
 export type Configuration = typeof configuration;
+
+type X = Configuration["taskQueues"];

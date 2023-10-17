@@ -76,7 +76,7 @@ export type NamespaceConfiguration = {
   /**
    * Configuration for all task queues in the namespace
    */
-  taskQueues: Record<string, true>;
+  taskQueues: readonly string[];
   /**
    * Configuration for all workflows in the namespace
    */
@@ -214,7 +214,7 @@ export type TypedActivityOptions<TConfig extends NamespaceConfiguration> = Omit<
    *
    * @default current worker task queue
    */
-  taskQueue?: Extract<keyof TConfig["taskQueues"], string> | (string & {});
+  taskQueue?: TConfig["taskQueues"][number] | (string & {});
 } & (
     | {
         /**
@@ -286,7 +286,7 @@ export type TypedWorkerOptions<TConfig extends NamespaceConfiguration> = Omit<
   /**
    * The task queue the worker will pull from
    */
-  taskQueue: Extract<keyof TConfig["taskQueues"], string> | (string & {});
+  taskQueue: TConfig["taskQueues"][number] | (string & {});
   /**
    * Registration of a SinkFunction, including per-sink-function options.
    *
@@ -416,7 +416,7 @@ export type WorkflowContext<
    * Once `f` is called, Workflow Execution immediately completes.
    */
   makeContinueAsNewFn: (options: {
-    taskQueue?: Extract<keyof TConfig["taskQueues"], string> | (string & {});
+    taskQueue?: TConfig["taskQueues"][number] | (string & {});
     workflowRunTimeout?: Duration;
     workflowTaskTimeout?: Duration;
     memo?: Record<string, unknown>;
@@ -599,7 +599,7 @@ export type SearchAttributeTypes<TConfig extends NamespaceConfiguration> = {
   RunId: string;
   StartTime: Date;
   StateTransitionCount: number;
-  TaskQueue: Extract<keyof TConfig["taskQueues"], string> | (string & {});
+  TaskQueue: TConfig["taskQueues"][number] | (string & {});
   TemporalScheduledStartTime: Date;
   TemporalScheduledById: string;
   TemporalSchedulePaused: boolean;
@@ -634,7 +634,7 @@ export type TypedWorkflowOptions<TConfig extends NamespaceConfiguration> = Omit<
    * Task queue to use for Workflow tasks. It should match a task queue specified when creating a
    * `Worker` that hosts the Workflow code.
    */
-  taskQueue: Extract<keyof TConfig["taskQueues"], string> | (string & {});
+  taskQueue: TConfig["taskQueues"][number] | (string & {});
 };
 
 export type TypedChildWorkflowOptions<TConfig extends NamespaceConfiguration> = Omit<
@@ -652,7 +652,7 @@ export type TypedChildWorkflowOptions<TConfig extends NamespaceConfiguration> = 
    * Task queue to use for Workflow tasks. It should match a task queue specified when creating a
    * `Worker` that hosts the Workflow code.
    */
-  taskQueue?: Extract<keyof TConfig["taskQueues"], string> | (string & {});
+  taskQueue?: TConfig["taskQueues"][number] | (string & {});
 };
 
 export type TypedWorkflowSignalWithStartOptions<
