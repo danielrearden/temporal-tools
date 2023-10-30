@@ -7,54 +7,82 @@ class ListFilterQueryBuilderImplementation<TConfig extends NamespaceConfiguratio
    * Appends a query expression to the query string for the provided attribute.
    * If this method is called multiple times, the expressions are combined with a logical AND.
    */
-  where<TAttribute extends keyof SearchAttributeTypes<TConfig>>(attribute: TAttribute) {
+  where<TAttribute extends keyof SearchAttributeTypes<TConfig>>(
+    attribute: TAttribute,
+  ): {
+    eq: (
+      value: SearchAttributeTypes<TConfig>[TAttribute],
+    ) => ListFilterQueryBuilderImplementation<TConfig>;
+    ne: (
+      value: SearchAttributeTypes<TConfig>[TAttribute],
+    ) => ListFilterQueryBuilderImplementation<TConfig>;
+    lt: (
+      value: SearchAttributeTypes<TConfig>[TAttribute],
+    ) => ListFilterQueryBuilderImplementation<TConfig>;
+    lte: (
+      value: SearchAttributeTypes<TConfig>[TAttribute],
+    ) => ListFilterQueryBuilderImplementation<TConfig>;
+    gt: (
+      value: SearchAttributeTypes<TConfig>[TAttribute],
+    ) => ListFilterQueryBuilderImplementation<TConfig>;
+    gte: (
+      value: SearchAttributeTypes<TConfig>[TAttribute],
+    ) => ListFilterQueryBuilderImplementation<TConfig>;
+    in: (
+      values: SearchAttributeTypes<TConfig>[TAttribute][],
+    ) => ListFilterQueryBuilderImplementation<TConfig>;
+    between: (
+      lower: SearchAttributeTypes<TConfig>[TAttribute],
+      upper: SearchAttributeTypes<TConfig>[TAttribute],
+    ) => ListFilterQueryBuilderImplementation<TConfig>;
+  } {
     return {
       /**
        * Equivalent to `attribute = value`
        */
-      eq: (value: SearchAttributeTypes<TConfig>[TAttribute]) => {
+      eq: (value) => {
         this.#expressions.push(`${String(attribute)} = ${this.#formatValue(value)}`);
         return this;
       },
       /**
        * Equivalent to `attribute != value`
        */
-      ne: (value: SearchAttributeTypes<TConfig>[TAttribute]) => {
+      ne: (value) => {
         this.#expressions.push(`${String(attribute)} != ${this.#formatValue(value)}`);
         return this;
       },
       /**
        * Equivalent to `attribute < value`
        */
-      lt: (value: SearchAttributeTypes<TConfig>[TAttribute]) => {
+      lt: (value) => {
         this.#expressions.push(`${String(attribute)} < ${this.#formatValue(value)}`);
         return this;
       },
       /**
        * Equivalent to `attribute <= value`
        */
-      lte: (value: SearchAttributeTypes<TConfig>[TAttribute]) => {
+      lte: (value) => {
         this.#expressions.push(`${String(attribute)} <= ${this.#formatValue(value)}`);
         return this;
       },
       /**
        * Equivalent to `attribute > value`
        */
-      gt: (value: SearchAttributeTypes<TConfig>[TAttribute]) => {
+      gt: (value) => {
         this.#expressions.push(`${String(attribute)} > ${this.#formatValue(value)}`);
         return this;
       },
       /**
        * Equivalent to `attribute >= value`
        */
-      gte: (value: SearchAttributeTypes<TConfig>[TAttribute]) => {
+      gte: (value) => {
         this.#expressions.push(`${String(attribute)} >= ${this.#formatValue(value)}`);
         return this;
       },
       /**
        * Equivalent to `attribute IN (values)`
        */
-      in: (values: SearchAttributeTypes<TConfig>[TAttribute][]) => {
+      in: (values) => {
         this.#expressions.push(
           `${String(attribute)} IN (${values.map(this.#formatValue).join(", ")})`,
         );
@@ -63,10 +91,7 @@ class ListFilterQueryBuilderImplementation<TConfig extends NamespaceConfiguratio
       /**
        * Equivalent to `attribute BETWEEN lower AND upper`
        */
-      between: (
-        lower: SearchAttributeTypes<TConfig>[TAttribute],
-        upper: SearchAttributeTypes<TConfig>[TAttribute],
-      ) => {
+      between: (lower, upper) => {
         this.#expressions.push(
           `${String(attribute)} BETWEEN ${this.#formatValue(lower)} AND ${this.#formatValue(
             upper,
