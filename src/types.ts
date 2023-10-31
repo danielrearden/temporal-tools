@@ -51,6 +51,7 @@ export type SupportedType =
       [key: string]: SupportedType;
     }
   | null
+  | undefined
   | CustomDataConverterTypeMap[keyof CustomDataConverterTypeMap];
 
 export type SupportedZodType = ZodType<SupportedType> | ZodUndefined | ZodVoid;
