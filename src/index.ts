@@ -11,3 +11,4 @@ export {
   RegExpSerializer,
   URLSerializer,
 } from "./payloadConverter.js";
+export { CustomDataConverterTypeMap, IgnoredCustomTypes } from "./types.js";

@@ -19,6 +19,8 @@ import { z, ZodTuple, ZodType, ZodUndefined, ZodVoid } from "zod";
 
 export interface CustomDataConverterTypeMap {}
 
+export interface IgnoredCustomTypes {}
+
 export type CustomDataConverterSerializer<TType> = {
   isTypeOf: (value: unknown) => boolean;
   deserialize: (content: any) => TType;
@@ -52,7 +54,8 @@ export type SupportedType =
     }
   | null
   | undefined
-  | CustomDataConverterTypeMap[keyof CustomDataConverterTypeMap];
+  | CustomDataConverterTypeMap[keyof CustomDataConverterTypeMap]
+  | IgnoredCustomTypes[keyof IgnoredCustomTypes];
 
 export type SupportedZodType = ZodType<SupportedType> | ZodUndefined | ZodVoid;
 
