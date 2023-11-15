@@ -1,80 +1,57 @@
-import { createTemporalConfiguration } from "../src/configuration.js";
-import z from "zod";
+import { CreateConfiguration, SafeFunction } from "../src/types.js";
 
-export const configuration = createTemporalConfiguration({
-  namespace: "default",
-  taskQueues: ["high-priority"] as const,
+export type Configuration = CreateConfiguration<{
+  namespace: "default";
+  taskQueues: ["high-priority"];
   activities: {
-    sayHello: {
-      args: z.tuple([z.object({ name: z.string() })]),
-      returnValue: z.string(),
-    },
-    scoped$doSomething: {
-      args: z.tuple([]),
-      returnValue: z.number(),
-    },
-  },
+    generic: SafeFunction<<T extends string | number>(args: { value: T }) => Promise<T>>;
+    sayHello: SafeFunction<(args: { name: string }) => Promise<string>>;
+    scoped$doSomething: SafeFunction<() => Promise<number>>;
+  };
   workflows: {
     bigIncrement: {
-      args: z.tuple([z.object({ initialValue: z.bigint().positive() })]),
-      returnValue: z.bigint(),
-    },
+      fn: SafeFunction<(args: { initialValue: bigint }) => Promise<bigint>>;
+    };
     counter: {
-      args: z.tuple([z.object({ initialValue: z.number().positive() })]),
-      returnValue: z.void(),
+      fn: SafeFunction<(args: { initialValue: number }) => Promise<void>>;
       signals: {
-        increment: {
-          args: z.tuple([z.object({ delta: z.number().positive() })]),
-        },
-      },
+        increment: SafeFunction<(args: { delta: number }) => Promise<void>>;
+      };
       queries: {
-        get: {
-          args: z.tuple([]),
-          returnValue: z.number(),
-        },
-      },
-    },
+        get: SafeFunction<() => number>;
+      };
+    };
     heartbeat: {
-      args: z.tuple([]),
-      returnValue: z.string(),
-    },
+      fn: SafeFunction<() => Promise<string>>;
+    };
     increment: {
-      args: z.tuple([z.object({ initialValue: z.number().positive() })]),
-      returnValue: z.number(),
-    },
+      fn: SafeFunction<(args: { initialValue: number }) => Promise<number>>;
+    };
     helloWorld: {
-      args: z.tuple([z.object({ name: z.string() })]),
-      returnValue: z.string(),
-    },
+      fn: SafeFunction<(args: { name: string }) => Promise<string>>;
+    };
     parent: {
-      args: z.tuple([z.object({ value: z.number() })]),
-      returnValue: z.number(),
-    },
+      fn: SafeFunction<(args: { value: number }) => Promise<number>>;
+    };
     child: {
-      args: z.tuple([z.object({ value: z.number() })]),
-      returnValue: z.number(),
-    },
+      fn: SafeFunction<(args: { value: number }) => Promise<number>>;
+    };
     scoped: {
-      args: z.tuple([]),
-      returnValue: z.number(),
-    },
+      fn: SafeFunction<() => Promise<number>>;
+    };
     safeIterable: {
-      args: z.tuple([z.object({ list: z.array(z.number()) })]),
-      returnValue: z.void(),
-    },
-  },
+      fn: SafeFunction<(args: { list: number[] }) => Promise<void>>;
+    };
+    withGenericActivity: {
+      fn: SafeFunction<(args: { value: string | number }) => Promise<void>>;
+    };
+  };
   searchAttributes: {
-    CustomIntField: "Int",
-  },
+    CustomIntField: "Int";
+  };
   sinks: {
     analytics: {
-      addEvent: {
-        args: z.tuple([z.record(z.string(), z.any())]),
-      },
-    },
-  },
-});
-
-export type Configuration = typeof configuration;
-
-type X = Configuration["taskQueues"];
+      addEvent: SafeFunction<(args: Record<string, any>) => Promise<void>>;
+    };
+  };
+}>;

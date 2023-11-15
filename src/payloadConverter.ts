@@ -9,7 +9,6 @@ import {
   ValueError,
 } from "@temporalio/common";
 import { decode, encode } from "@temporalio/common/lib/encoding.js";
-import { z } from "zod";
 import { CustomDataConverterSerializer, CustomDataConverterSerializers, Json } from "./types.js";
 
 export class CustomPayloadConverter extends CompositePayloadConverter {
@@ -115,7 +114,6 @@ export const createCustomDataConverterSerializer = <TType, TSerialized extends J
   isTypeOf,
   serialize,
   deserialize,
-  zodType: z.custom<TType>(isTypeOf),
 });
 
 export const BigIntSerializer = createCustomDataConverterSerializer<bigint, string>({

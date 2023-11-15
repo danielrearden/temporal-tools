@@ -142,8 +142,6 @@ class ListFilterQueryBuilderImplementation<TConfig extends NamespaceConfiguratio
  *
  * See https://docs.temporal.io/visibility#list-filter
  */
-export const createListFilterQueryBuilder = <TConfig extends NamespaceConfiguration>(
-  _config: TConfig,
-) => {
+export const createListFilterQueryBuilder = <TConfig extends NamespaceConfiguration>() => {
   return class ListFilterQueryBuilder extends ListFilterQueryBuilderImplementation<TConfig> {};
 };

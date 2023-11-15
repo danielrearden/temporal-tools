@@ -1,22 +1,27 @@
 import { condition } from "@temporalio/workflow";
 import { createWorkflowHelpers } from "../src/workflow.js";
-import { configuration } from "./configuration.js";
+import { Configuration } from "./configuration.js";
+import { z } from "zod";
 
 const { createWorkflow, proxyActivities, executeChild, proxySinks } =
-  createWorkflowHelpers(configuration);
+  createWorkflowHelpers<Configuration>();
 
-const { sayHello } = proxyActivities({
+const { sayHello, generic } = proxyActivities({
   scheduleToCloseTimeout: "5m",
 });
 
 const { analytics } = proxySinks();
 
 /**
- * This Workflow demonstrates calling an activity.
+ * This Workflow demonstrates argument validation.
  */
-export const helloWorld = createWorkflow("helloWorld", async ({ name }) => {
-  return await sayHello({ name });
-});
+export const helloWorld = createWorkflow(
+  "helloWorld",
+  async ({ name }) => {
+    return await sayHello({ name });
+  },
+  [z.object({ name: z.string() })],
+);
 
 /**
  * This is a simple Workflow that does not call any activities.
@@ -108,3 +113,10 @@ export const safeIterable = createWorkflow(
     }
   },
 );
+
+/**
+ * This Workflow demonstrates using a generic activity function.
+ */
+export const withGenericActivity = createWorkflow("withGenericActivity", async ({ value }) => {
+  await generic({ value });
+});

@@ -9,6 +9,7 @@ const worker = await createWorker({
   dataConverter: {
     payloadConverterPath: createRequire(import.meta.url).resolve("./payloadConverter.ts"),
   },
+  namespace: "default",
   sinks,
   taskQueue: "high-priority",
   activities,

@@ -6,13 +6,9 @@ import { NamespaceConfiguration, TypedClient } from "./types.js";
  */
 export const createClient = <TConfig extends NamespaceConfiguration>(
   /**
-   * Namespace configuration
-   */
-  config: TConfig,
-  /**
    * Client options. Note: The `namespace` is automatically set to the namespace of the configuration.
    */
-  options?: Omit<ClientOptions, "namespace">,
+  options?: Omit<ClientOptions, "namespace"> & { namespace: TConfig["namespace"] },
 ): TypedClient<TConfig> => {
-  return new Client({ ...options, namespace: config.namespace }) as any;
+  return new Client({ ...options }) as any;
 };

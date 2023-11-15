@@ -15,7 +15,7 @@ import {
   QueryDefinition,
   SignalDefinition,
 } from "@temporalio/workflow";
-import { z } from "zod";
+import { ZodTuple, ZodTypeAny, z } from "zod";
 import {
   NamespaceConfiguration,
   TypedProxiedActivities,
@@ -26,42 +26,36 @@ import {
   TypedSinks,
   WorkflowContext,
   WithTypedWorkflowArgs,
+  WorkflowArgumentZodSchemas,
 } from "./types.js";
 
 /**
  * Returns a set of utility functions for creating type-safe Temporal workflows.
  */
-export const createWorkflowHelpers = <TConfig extends NamespaceConfiguration>(
-  config: TConfig,
-): {
+export const createWorkflowHelpers = <TConfig extends NamespaceConfiguration>(): {
   /**
    * Creates a workflow function for the provided workflow type. The workflow function is passed
    * a workflow context object as its last argument, which includes a further set of workflow-specific utilities.
    */
   createWorkflow: <TWorkflowType extends keyof TConfig["workflows"]>(
     workflowType: TWorkflowType,
-    workflow: TConfig["workflows"][TWorkflowType]["args"] extends {}
-      ? (
-          ...args: [
-            ...z.infer<TConfig["workflows"][TWorkflowType]["args"]>,
-            WorkflowContext<TConfig, TWorkflowType>,
-          ]
-        ) => Promise<z.infer<TConfig["workflows"][TWorkflowType]["returnValue"]>>
-      : (
-          context: WorkflowContext<TConfig, TWorkflowType>,
-        ) => Promise<z.infer<TConfig["workflows"][TWorkflowType]["returnValue"]>>,
-  ) => TConfig["workflows"][TWorkflowType]["args"] extends {}
-    ? (
-        ...args: z.infer<TConfig["workflows"][TWorkflowType]["args"]>
-      ) => Promise<z.infer<TConfig["workflows"][TWorkflowType]["returnValue"]>>
-    : () => Promise<z.infer<TConfig["workflows"][TWorkflowType]["returnValue"]>>;
+    workflow: (
+      ...args: [
+        ...Parameters<TConfig["workflows"][TWorkflowType]["fn"]>,
+        WorkflowContext<TConfig, TWorkflowType>,
+      ]
+    ) => ReturnType<TConfig["workflows"][TWorkflowType]["fn"]>,
+    schema?: WorkflowArgumentZodSchemas<TConfig, TWorkflowType>,
+  ) => (
+    ...args: Parameters<TConfig["workflows"][TWorkflowType]["fn"]>
+  ) => ReturnType<TConfig["workflows"][TWorkflowType]["fn"]>;
   /**
    * Start a child Workflow execution and await its completion.
    */
   executeChild: <TWorkflowType extends keyof TConfig["workflows"]>(
     workflowType: TWorkflowType,
     options: WithTypedWorkflowArgs<TConfig, TWorkflowType, TypedChildWorkflowOptions<TConfig>>,
-  ) => Promise<z.infer<TConfig["workflows"][TWorkflowType]["returnValue"]>>;
+  ) => Promise<ReturnType<TConfig["workflows"][TWorkflowType]["fn"]>>;
   /**
    * Configure Activity functions with given {@link ActivityOptions}.
    *
@@ -97,134 +91,132 @@ export const createWorkflowHelpers = <TConfig extends NamespaceConfiguration>(
    */
   upsertSearchAttributes: (searchAttributes: TypedSearchAttributes<TConfig>) => void;
 } => {
-  const contextByWorkflowType = {} as Record<
-    keyof TConfig["workflows"],
-    WorkflowContext<TConfig, keyof TConfig["workflows"]>
-  >;
-
-  for (const workflowType in config.workflows) {
-    const signals: Record<string, SignalDefinition> = {};
-    const queries: Record<string, QueryDefinition<any>> = {};
-
-    if (config.workflows[workflowType].signals) {
-      for (const signalName in config.workflows[workflowType].signals) {
-        signals[signalName] = defineSignal(signalName);
-      }
-    }
-
-    if (config.workflows[workflowType].queries) {
-      for (const queryName in config.workflows[workflowType].queries) {
-        queries[queryName] = defineQuery(queryName);
-      }
-    }
-
-    contextByWorkflowType[workflowType as unknown as keyof TConfig["workflows"]] = {
-      continueAsNew: continueAsNew as any,
-      createSafeAsyncIterable: (
-        iterable,
-        createContinueAsNewArgs,
-        { maxHistoryEvents = 10_240, maxHistorySize = 1_000_000 } = {},
-      ) => {
-        return {
-          [Symbol.asyncIterator]: () => {
-            const iterator =
-              Symbol.iterator in iterable
-                ? iterable[Symbol.iterator]()
-                : iterable[Symbol.asyncIterator]();
-
-            let index = -1;
-            let lastValue: any = undefined;
-
-            return {
-              next: async () => {
-                if (index !== -1) {
-                  const info = workflowInfo();
-
-                  if (
-                    info.historySize >= maxHistorySize ||
-                    info.historyLength >= maxHistoryEvents
-                  ) {
-                    await continueAsNew(...createContinueAsNewArgs(lastValue, index));
-                  }
-                }
-
-                const { value, done } = await iterator.next();
-                if (done) {
-                  return { value, done };
-                }
-
-                lastValue = value;
-                index++;
-
-                return { value, done };
-              },
-              return: iterator.return,
-              throw: iterator.throw,
-            };
-          },
-        };
-      },
-      makeContinueAsNewFn: ({ ...options }) => {
-        return makeContinueAsNewFunc({
-          workflowType: workflowType as string,
-          ...(options as any),
-        }) as any;
-      },
-      proxyScopedActivities: (options) => {
-        return new Proxy(proxyActivities(options), {
-          get: (target, prop) => {
-            if (
-              typeof prop === "string" &&
-              typeof target[`${workflowType}$${prop}`] !== "undefined"
-            ) {
-              return target[`${workflowType}$${prop}`];
-            }
-
-            return undefined;
-          },
-        }) as any;
-      },
-      setSignalHandler: (signal, handler) => {
-        setHandler(signals[signal as string], handler);
-      },
-      setQueryHandler: (query, handler) => {
-        setHandler(queries[query as string], handler);
-      },
-    } as WorkflowContext<TConfig, keyof TConfig["workflows"]>;
-  }
-
   return {
-    createWorkflow: (workflowType, workflow: any) => {
-      return async (...args: any[]) => {
-        const schema = config.workflows[workflowType as string].args;
+    createWorkflow: (workflowType, workflow: any, schema) => {
+      const signals: Record<string, SignalDefinition> = {};
+      const queries: Record<string, QueryDefinition<any>> = {};
+      const getSignal = (signalName: string) => {
+        if (typeof signals[signalName] === "undefined") {
+          signals[signalName] = defineSignal(signalName);
+        }
 
+        return signals[signalName];
+      };
+      const getQuery = (queryName: string) => {
+        if (typeof queries[queryName] === "undefined") {
+          queries[queryName] = defineQuery(queryName);
+        }
+
+        return queries[queryName];
+      };
+
+      const context = {
+        continueAsNew: continueAsNew as any,
+        createSafeAsyncIterable: (
+          iterable,
+          createContinueAsNewArgs,
+          { maxHistoryEvents = 10_240, maxHistorySize = 1_000_000 } = {},
+        ) => {
+          return {
+            [Symbol.asyncIterator]: () => {
+              const iterator =
+                Symbol.iterator in iterable
+                  ? iterable[Symbol.iterator]()
+                  : iterable[Symbol.asyncIterator]();
+
+              let index = -1;
+              let lastValue: any = undefined;
+
+              return {
+                next: async () => {
+                  if (index !== -1) {
+                    const info = workflowInfo();
+
+                    if (
+                      info.historySize >= maxHistorySize ||
+                      info.historyLength >= maxHistoryEvents
+                    ) {
+                      await continueAsNew(...createContinueAsNewArgs(lastValue, index));
+                    }
+                  }
+
+                  const { value, done } = await iterator.next();
+                  if (done) {
+                    return { value, done };
+                  }
+
+                  lastValue = value;
+                  index++;
+
+                  return { value, done };
+                },
+                return: iterator.return,
+                throw: iterator.throw,
+              };
+            },
+          };
+        },
+        makeContinueAsNewFn: ({ ...options }) => {
+          return makeContinueAsNewFunc({
+            workflowType: workflowType as string,
+            ...(options as any),
+          }) as any;
+        },
+        proxyScopedActivities: (options) => {
+          return new Proxy(proxyActivities(options), {
+            get: (target, prop) => {
+              if (
+                typeof prop === "string" &&
+                typeof target[`${workflowType as string}$${prop}`] !== "undefined"
+              ) {
+                return target[`${workflowType as string}$${prop}`];
+              }
+
+              return undefined;
+            },
+          }) as any;
+        },
+        setSignalHandler: (signalName, handler) => {
+          setHandler(getSignal(signalName as string), handler);
+        },
+        setQueryHandler: (queryName, handler) => {
+          setHandler(getQuery(queryName as string), handler);
+        },
+      } as WorkflowContext<TConfig, keyof TConfig["workflows"]>;
+
+      return (...args: any[]) => {
         if (schema) {
-          const result = await schema.safeParseAsync(args);
-
-          if (result.success) {
-            return workflow(...result.data, contextByWorkflowType[workflowType]);
-          } else {
-            const errors = result.error.issues
-              .map((issue) => {
-                const path =
-                  "args" +
-                  issue.path
-                    .map((part) => {
-                      if (typeof part === "number") {
-                        return `[${part}]`;
-                      } else {
-                        return `.${part}`;
-                      }
-                    })
-                    .join("");
-                return `  ${path}: ${issue.message}`;
-              })
-              .join("\n");
-            const message = `Invalid workflow arguments:\n${errors}`;
-            throw new ApplicationFailure(message, null, true);
-          }
+          return z
+            .tuple(schema as any)
+            .safeParseAsync(args)
+            .then((result) => {
+              if (result.success) {
+                return workflow(...(result.data as any), context);
+              } else {
+                const errors = result.error.issues
+                  .map((issue) => {
+                    const path =
+                      "args" +
+                      issue.path
+                        .map((part) => {
+                          if (typeof part === "number") {
+                            return `[${part}]`;
+                          } else {
+                            return `.${part}`;
+                          }
+                        })
+                        .join("");
+                    return `  ${path}: ${issue.message}`;
+                  })
+                  .join("\n");
+                const message = `Invalid workflow arguments:\n${errors}`;
+                throw new ApplicationFailure(message, null, true);
+              }
+            }) as ReturnType<TConfig["workflows"][typeof workflowType]["fn"]>;
         } else {
-          return workflow(contextByWorkflowType[workflowType]);
+          return workflow(...args, context) as ReturnType<
+            TConfig["workflows"][typeof workflowType]["fn"]
+          >;
         }
       };
     },

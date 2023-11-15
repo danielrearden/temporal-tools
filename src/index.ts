@@ -1,4 +1,3 @@
-export { createTemporalConfiguration } from "./configuration.js";
 export { createWorkerHelpers } from "./worker.js";
 export { createWorkflowHelpers } from "./workflow.js";
 export { createClient } from "./client.js";
@@ -11,4 +10,4 @@ export {
   RegExpSerializer,
   URLSerializer,
 } from "./payloadConverter.js";
-export { CustomDataConverterTypeMap, IgnoredCustomTypes } from "./types.js";
+export { CustomDataConverterTypeMap } from "./types.js";

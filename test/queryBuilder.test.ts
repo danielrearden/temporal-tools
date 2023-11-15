@@ -1,10 +1,10 @@
 import assert from "node:assert";
 import { describe, test } from "node:test";
-import { configuration } from "../example/configuration.js";
+import { Configuration } from "../example/configuration.js";
 import { createListFilterQueryBuilder } from "../src/queryBuilder.js";
 
 describe("createQueryBuilder", () => {
-  const QueryBuilder = createListFilterQueryBuilder(configuration);
+  const QueryBuilder = createListFilterQueryBuilder<Configuration>();
 
   test("generates correct syntax", () => {
     assert.strictEqual(

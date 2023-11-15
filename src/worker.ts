@@ -10,9 +10,7 @@ import {
 /**
  * Returns a set of type-safe utilities for creating a Temporal worker.
  */
-export const createWorkerHelpers = <TConfig extends NamespaceConfiguration, TContext>(
-  config: TConfig,
-): {
+export const createWorkerHelpers = <TConfig extends NamespaceConfiguration, TContext>(): {
   /**
    * Creates a set of activity functions to pass to `createWorker` from the provided activity
    * context object and activity factories.
@@ -67,7 +65,6 @@ export const createWorkerHelpers = <TConfig extends NamespaceConfiguration, TCon
       return Worker.create({
         ...options,
         sinks: { ...defaultSinks(), ...options.sinks },
-        namespace: config.namespace,
         taskQueue: options.taskQueue as string,
       });
     },

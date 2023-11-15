@@ -1,13 +1,14 @@
 import { createRequire } from "node:module";
 import { setTimeout } from "node:timers/promises";
 import { createClient } from "../src/client.js";
-import { configuration } from "./configuration.js";
+import { Configuration } from "./configuration.js";
 import { createListFilterQueryBuilder } from "../src/queryBuilder.js";
 
-const client = createClient(configuration, {
+const client = createClient<Configuration>({
   dataConverter: {
     payloadConverterPath: createRequire(import.meta.url).resolve("./payloadConverter.ts"),
   },
+  namespace: "default",
 });
 
 try {
@@ -60,7 +61,7 @@ try {
   console.log("Waiting for Temporal to index the Workflow...");
   await setTimeout(10_000);
 
-  const QueryBuilder = createListFilterQueryBuilder(configuration);
+  const QueryBuilder = createListFilterQueryBuilder<Configuration>();
   const query = new QueryBuilder().where("CustomIntField").eq(100).build();
   const results = client.workflow.list({ query });
 

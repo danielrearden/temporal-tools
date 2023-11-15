@@ -2,18 +2,18 @@ import assert from "node:assert";
 import { randomUUID } from "node:crypto";
 import { after, before, describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { WorkflowExecutionInfo } from "@temporalio/client";
+import { WorkflowExecutionInfo, WorkflowFailedError } from "@temporalio/client";
 import { Worker } from "@temporalio/worker";
 import { createActivities, createWorker } from "../example/helpers.js";
 import * as factories from "../example/activities.js";
 import * as sinks from "../example/sinks.js";
 import { TypedClient } from "../src/types.js";
-import { Configuration, configuration } from "../example/configuration.js";
+import { Configuration } from "../example/configuration.js";
 import { createClient } from "../src/client.js";
 import { createListFilterQueryBuilder } from "../src/queryBuilder.js";
 import { retry } from "./utilities.js";
 
-const QueryBuilder = createListFilterQueryBuilder(configuration);
+const QueryBuilder = createListFilterQueryBuilder<Configuration>();
 
 let worker: Worker;
 let client: TypedClient<Configuration>;
@@ -27,6 +27,7 @@ describe("e2e", () => {
     const activities = createActivities(context, factories);
     worker = await createWorker({
       dataConverter: { payloadConverterPath },
+      namespace: "default",
       sinks,
       taskQueue: "high-priority",
       activities,
@@ -35,8 +36,9 @@ describe("e2e", () => {
 
     worker.run().catch(console.error);
 
-    client = createClient(configuration, {
+    client = createClient<Configuration>({
       dataConverter: { payloadConverterPath },
+      namespace: "default",
     });
   });
 
@@ -61,6 +63,27 @@ describe("e2e", () => {
       taskQueue: "high-priority",
     });
     assert.strictEqual(result, "Hello, John!");
+  });
+
+  test("argument validation", async () => {
+    try {
+      const result = await client.workflow.execute("helloWorld", {
+        // @ts-expect-error
+        args: [{ name: 42 }],
+        workflowId: randomUUID(),
+        taskQueue: "high-priority",
+      });
+      assert.fail(`Expected to throw, got ${result}`);
+    } catch (err) {
+      if (err instanceof WorkflowFailedError) {
+        assert.strictEqual(
+          err.cause?.message,
+          "Invalid workflow arguments:\n  args[0].name: Expected string, received number",
+        );
+      } else {
+        assert.fail(`Expected WorkflowFailedError, got ${err}`);
+      }
+    }
   });
 
   test("execute workflow with child workflow", async () => {

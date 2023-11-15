@@ -15,23 +15,20 @@ import {
   ExternalWorkflowHandle,
   WorkflowInfo,
 } from "@temporalio/workflow";
-import { z, ZodTuple, ZodType, ZodUndefined, ZodVoid } from "zod";
+import { ZodType } from "zod";
 
 export interface CustomDataConverterTypeMap {}
-
-export interface IgnoredCustomTypes {}
-
-export type CustomDataConverterSerializer<TType> = {
-  isTypeOf: (value: unknown) => boolean;
-  deserialize: (content: any) => TType;
-  serialize: (value: TType) => any;
-  zodType: ZodType<TType>;
-};
 
 export type CustomDataConverterSerializers = {
   [K in keyof CustomDataConverterTypeMap]: CustomDataConverterSerializer<
     CustomDataConverterTypeMap[K]
   >;
+};
+
+export type CustomDataConverterSerializer<TType> = {
+  isTypeOf: (value: unknown) => boolean;
+  deserialize: (content: any) => TType;
+  serialize: (value: TType) => any;
 };
 
 export type Json =
@@ -54,16 +51,20 @@ export type SupportedType =
     }
   | null
   | undefined
-  | CustomDataConverterTypeMap[keyof CustomDataConverterTypeMap]
-  | IgnoredCustomTypes[keyof IgnoredCustomTypes];
+  | void
+  | CustomDataConverterTypeMap[keyof CustomDataConverterTypeMap];
 
-export type SupportedZodType = ZodType<SupportedType> | ZodUndefined | ZodVoid;
+export type SafeFunction<T extends (...args: any[]) => any> = Parameters<T> extends SupportedType[]
+  ? ReturnType<T> extends SupportedType | Promise<SupportedType>
+    ? T
+    : unknown
+  : unknown;
 
 export type NamespaceConfiguration = {
   /**
    * Configuration for all activities in the namespace
    */
-  activities: Record<string, ActivityConfiguration>;
+  activities: Record<string, (...args: any[]) => Promise<any>>;
   /**
    * The namespace to use for all workflows and activities
    */
@@ -80,12 +81,14 @@ export type NamespaceConfiguration = {
   /**
    * Configuration for all task queues in the namespace
    */
-  taskQueues: readonly string[];
+  taskQueues: [string, ...string[]];
   /**
    * Configuration for all workflows in the namespace
    */
   workflows: Record<string, WorkflowConfiguration>;
 };
+
+export type CreateConfiguration<T extends NamespaceConfiguration> = T;
 
 /**
  * Types of search attributes supported by Temporal.
@@ -108,66 +111,32 @@ export type SearchAttributeTypeToTSType<TSearchAttributeType extends SearchAttri
     ? string
     : never;
 
-export type ActivityConfiguration = {
-  /**
-   * The types of the arguments passed to the activity
-   */
-  args: ZodTuple<[] | [SupportedZodType, ...SupportedZodType[]]>;
-  /**
-   * The type of the return value of the activity
-   */
-  returnValue: SupportedZodType;
-};
-
 /**
  * Configuration for an individual sink. Each sink defines a set of methods that can be called from workflows.
  * See https://docs.temporal.io/dev-guide/typescript/observability#logging-from-workflows-with-workflow-sinks
  */
-export type SinkConfiguration = Record<string, SinkFunctionConfiguration>;
+export type SinkConfiguration = Record<string, SinkFunction>;
 
-export type SinkFunctionConfiguration = {
-  /**
-   * The types of the arguments passed to the sink method
-   */
-  args: ZodTuple<[] | [SupportedZodType, ...SupportedZodType[]]>;
-};
+export type SinkFunction = (...args: any[]) => void | Promise<void>;
 
 export type WorkflowConfiguration = {
   /**
-   * The types of the arguments passed to the workflow
+   * The workflow function
    */
-  args: ZodTuple<[] | [SupportedZodType, ...SupportedZodType[]]>;
-  /**
-   * The type of the return value of the workflow
-   */
-  returnValue: SupportedZodType;
+  fn: (...args: any[]) => Promise<any>;
   /**
    * Configuration for all signals that the workflow can receive
    */
-  signals?: Record<string, SignalConfiguration>;
+  signals?: Record<string, SignalFunction>;
   /**
    * Configuration for all queries that the workflow can receive
    */
-  queries?: Record<string, QueryConfiguration>;
+  queries?: Record<string, QueryFunction>;
 };
 
-export type SignalConfiguration = {
-  /**
-   * The types of the arguments passed to the signal
-   */
-  args: ZodTuple<[] | [SupportedZodType, ...SupportedZodType[]]>;
-};
+export type SignalFunction = (...args: any[]) => Promise<void>;
 
-export type QueryConfiguration = {
-  /**
-   * The types of the arguments passed to the query
-   */
-  args: ZodTuple<[] | [SupportedZodType, ...SupportedZodType[]]>;
-  /**
-   * The type of the return value of the query
-   */
-  returnValue: SupportedZodType;
-};
+export type QueryFunction = (...args: any[]) => any;
 
 export type TypedProxiedActivities<TConfig extends NamespaceConfiguration> = {
   [TActivity in keyof TConfig["activities"] as TActivity extends ScopedActivityName<
@@ -202,9 +171,7 @@ export type ScopedActivityName<
 export type TypedActivity<
   TConfig extends NamespaceConfiguration,
   TActivity extends keyof TConfig["activities"],
-> = (
-  ...args: z.infer<TConfig["activities"][TActivity]["args"]>
-) => Promise<z.infer<TConfig["activities"][TActivity]["returnValue"]>>;
+> = TConfig["activities"][TActivity];
 
 /**
  * Options for remote activity invocation
@@ -287,6 +254,7 @@ export type TypedWorkerOptions<TConfig extends NamespaceConfiguration> = Omit<
    * Mapping of activity name to implementation
    */
   activities: AllActivities<TConfig>;
+  namespace: TConfig["namespace"];
   /**
    * The task queue the worker will pull from
    */
@@ -330,7 +298,7 @@ export type TypedWorkerOptions<TConfig extends NamespaceConfiguration> = Omit<
       [TSinkFunction in keyof TConfig["sinks"][TSink]]: {
         fn(
           info: WorkflowInfo,
-          ...args: z.infer<TConfig["sinks"][TSink][TSinkFunction]["args"]>
+          ...args: Parameters<TConfig["sinks"][TSink][TSinkFunction]>
         ): void | Promise<void>;
         callDuringReplay?: boolean;
       };
@@ -348,7 +316,7 @@ export type TypedInjectedSink<
      */
     fn(
       info: WorkflowInfo,
-      ...args: z.infer<TConfig["sinks"][TSink][TSinkFunction]["args"]>
+      ...args: Parameters<TConfig["sinks"][TSink][TSinkFunction]>
     ): void | Promise<void>;
     /**
      * Whether or not the function will be called during Workflow replay.
@@ -373,7 +341,7 @@ export type TypedInjectedSink<
 export type TypedSinks<TConfig extends NamespaceConfiguration> = {
   [TSink in keyof TConfig["sinks"]]: {
     [TSinkFunction in keyof TConfig["sinks"][TSink]]: (
-      ...args: z.infer<TConfig["sinks"][TSink][TSinkFunction]["args"]>
+      ...args: Parameters<TConfig["sinks"][TSink][TSinkFunction]>
     ) => Promise<void>;
   };
 };
@@ -389,7 +357,7 @@ export type WorkflowContext<
    * Shorthand for `makeContinueAsNewFunc<F>()(...args)`. (See: {@link WorkflowContext.makeContinueAsNewFn}.)
    *
    */
-  continueAsNew: (...args: z.infer<TConfig["workflows"][TWorkflowType]["args"]>) => Promise<never>;
+  continueAsNew: (...args: Parameters<TConfig["workflows"][TWorkflowType]["fn"]>) => Promise<never>;
   /**
    * Takes an Iterable or AsyncIterable and returns an AsyncIterable that will
    * ContinueAsNew the current Workflow Execution when the event history grows too large.
@@ -406,7 +374,7 @@ export type WorkflowContext<
     createContinueAsNewArgs: (
       lastValue: T,
       lastIndex: number,
-    ) => z.infer<TConfig["workflows"][TWorkflowType]["args"]>,
+    ) => Parameters<TConfig["workflows"][TWorkflowType]["fn"]>,
     options?: {
       maxHistoryEvents?: number;
       maxHistorySize?: number;
@@ -426,7 +394,7 @@ export type WorkflowContext<
     memo?: Record<string, unknown>;
     searchAttributes?: TypedSearchAttributes<TConfig>;
     versioningIntent?: VersioningIntent;
-  }) => (...args: z.infer<TConfig["workflows"][TWorkflowType]["args"]>) => Promise<never>;
+  }) => (...args: Parameters<TConfig["workflows"][TWorkflowType]["fn"]>) => Promise<never>;
   /**
    * This function behaves like `proxyActivities`, but is limited to activities that are scoped to just this workflow.
    */
@@ -440,12 +408,12 @@ export type WorkflowContext<
    */
   setSignalHandler: TConfig["workflows"][TWorkflowType]["signals"] extends Record<
     string,
-    SignalConfiguration
+    SignalFunction
   >
     ? <TSignal extends keyof TConfig["workflows"][TWorkflowType]["signals"]>(
         signal: TSignal,
         handler: (
-          ...args: z.infer<TConfig["workflows"][TWorkflowType]["signals"][TSignal]["args"]>
+          ...args: Parameters<TConfig["workflows"][TWorkflowType]["signals"][TSignal]>
         ) => void | Promise<void>,
       ) => void
     : never;
@@ -456,15 +424,11 @@ export type WorkflowContext<
    */
   setQueryHandler: TConfig["workflows"][TWorkflowType]["queries"] extends Record<
     string,
-    QueryConfiguration
+    QueryFunction
   >
     ? <TQuery extends keyof TConfig["workflows"][TWorkflowType]["queries"]>(
         query: TQuery,
-        handler: (
-          ...args: z.infer<TConfig["workflows"][TWorkflowType]["queries"][TQuery]["args"]>
-        ) =>
-          | z.infer<TConfig["workflows"][TWorkflowType]["queries"][TQuery]["returnValue"]>
-          | z.infer<TConfig["workflows"][TWorkflowType]["queries"][TQuery]["returnValue"]>,
+        handler: TConfig["workflows"][TWorkflowType]["queries"][TQuery],
       ) => void
     : never;
 };
@@ -551,7 +515,7 @@ export type TypedWorkflowClient<TConfig extends NamespaceConfiguration> = Omit<
   execute: <TWorkflowType extends keyof TConfig["workflows"]>(
     workflowType: TWorkflowType,
     options: WithTypedWorkflowArgs<TConfig, TWorkflowType, TypedWorkflowOptions<TConfig>>,
-  ) => Promise<z.infer<TConfig["workflows"][TWorkflowType]["returnValue"]>>;
+  ) => ReturnType<TConfig["workflows"][TWorkflowType]["fn"]>;
   /**
    * Sends a Signal to a running Workflow or starts a new one if not already running and immediately Signals it.
    * Useful when you're unsure whether the Workflow has been started.
@@ -562,7 +526,7 @@ export type TypedWorkflowClient<TConfig extends NamespaceConfiguration> = Omit<
     TWorkflowType extends keyof TConfig["workflows"],
     TSignal extends TConfig["workflows"][TWorkflowType]["signals"] extends Record<
       string,
-      SignalConfiguration
+      SignalFunction
     >
       ? keyof TConfig["workflows"][TWorkflowType]["signals"]
       : never,
@@ -664,7 +628,7 @@ export type TypedWorkflowSignalWithStartOptions<
   TWorkflowType extends keyof TConfig["workflows"],
   TSignal extends TConfig["workflows"][TWorkflowType]["signals"] extends Record<
     string,
-    SignalConfiguration
+    SignalFunction
   >
     ? keyof TConfig["workflows"][TWorkflowType]["signals"]
     : never,
@@ -676,8 +640,8 @@ export type TypedWorkflowSignalWithStartOptions<
   /**
    * Arguments to invoke the signal handler with
    */
-  signalArgs: TConfig["workflows"][TWorkflowType]["signals"][TSignal] extends SignalConfiguration
-    ? z.infer<TConfig["workflows"][TWorkflowType]["signals"][TSignal]["args"]>
+  signalArgs: TConfig["workflows"][TWorkflowType]["signals"][TSignal] extends SignalFunction
+    ? Parameters<TConfig["workflows"][TWorkflowType]["signals"][TSignal]>
     : never;
 };
 
@@ -733,26 +697,26 @@ export type TypedWorkflowHandleWithFirstExecutionRunId<
 export type TypedResult<
   TConfig extends NamespaceConfiguration,
   TWorkflowType extends keyof TConfig["workflows"],
-> = () => Promise<z.infer<TConfig["workflows"][TWorkflowType]["returnValue"]>>;
+> = () => ReturnType<TConfig["workflows"][TWorkflowType]["fn"]>;
 
 export type TypedSignal<
   TConfig extends NamespaceConfiguration,
   TWorkflowType extends keyof TConfig["workflows"],
-> = TConfig["workflows"][TWorkflowType]["signals"] extends Record<string, SignalConfiguration>
+> = TConfig["workflows"][TWorkflowType]["signals"] extends Record<string, SignalFunction>
   ? <TSignal extends keyof TConfig["workflows"][TWorkflowType]["signals"]>(
       signal: TSignal,
-      ...args: z.infer<TConfig["workflows"][TWorkflowType]["signals"][TSignal]["args"]>
+      ...args: Parameters<TConfig["workflows"][TWorkflowType]["signals"][TSignal]>
     ) => Promise<void>
   : never;
 
 export type TypedQuery<
   TConfig extends NamespaceConfiguration,
   TWorkflowType extends keyof TConfig["workflows"],
-> = TConfig["workflows"][TWorkflowType]["queries"] extends Record<string, QueryConfiguration>
+> = TConfig["workflows"][TWorkflowType]["queries"] extends Record<string, QueryFunction>
   ? <TQuery extends keyof TConfig["workflows"][TWorkflowType]["queries"]>(
       query: TQuery,
-      ...args: z.infer<TConfig["workflows"][TWorkflowType]["queries"][TQuery]["args"]>
-    ) => Promise<z.infer<TConfig["workflows"][TWorkflowType]["queries"][TQuery]["returnValue"]>>
+      ...args: Parameters<TConfig["workflows"][TWorkflowType]["queries"][TQuery]>
+    ) => ReturnType<TConfig["workflows"][TWorkflowType]["queries"][TQuery]>
   : never;
 
 export type WithTypedWorkflowArgs<
@@ -763,5 +727,16 @@ export type WithTypedWorkflowArgs<
   /**
    * Arguments to pass to the Workflow function
    */
-  args: z.infer<TConfig["workflows"][TWorkflowType]["args"]>;
+  args: Parameters<TConfig["workflows"][TWorkflowType]["fn"]>;
 };
+
+export type ToTuple<Tuple extends [...any[]]> = {
+  [Index in keyof Tuple]: ZodType<Tuple[Index]>;
+};
+
+export type WorkflowArgumentZodSchemas<
+  TConfig extends NamespaceConfiguration,
+  TWorkflowType extends keyof TConfig["workflows"],
+> = ToTuple<Parameters<TConfig["workflows"][TWorkflowType]["fn"]>>["length"] extends 0
+  ? never
+  : ToTuple<Parameters<TConfig["workflows"][TWorkflowType]["fn"]>>;
